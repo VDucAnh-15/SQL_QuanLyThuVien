@@ -15,6 +15,8 @@ Web app nay duoc tao tu file SQL `quanlythuvien.sql`, cung cap giao dien de chay
 - So chi nhanh duoc cung cap boi tung nha cung cap
 - Thanh vien muon nhieu nhat
 - Danh sach ban sao sach can bao tri
+- Them thanh vien moi truc tiep tu web vao bang `ThanhVien`
+- Quan ly thanh vien co tim kiem, sua, xoa truc tiep tren web
 
 ## Yeu cau
 
