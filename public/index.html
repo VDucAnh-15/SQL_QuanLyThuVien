@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bảng điều khiển Quản Lý Thư Viện</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <p class="sidebar-kicker">Database tables</p>
+          <h1>Quản lý thư viện</h1>
+        </div>
+
+        <nav id="sidebarNav" class="sidebar-nav">
+          <button class="side-link active" data-view="dashboard">
+            <span>1.</span>
+            <strong>Tổng quan</strong>
+          </button>
+          <button class="side-link" data-view="members">
+            <span>2.</span>
+            <strong>Thành viên</strong>
+          </button>
+          <button class="side-link" data-view="books">
+            <span>3.</span>
+            <strong>Sách</strong>
+          </button>
+          <button class="side-link" data-view="suppliers">
+            <span>4.</span>
+            <strong>Nhà cung cấp</strong>
+          </button>
+          <button class="side-link" data-view="borrows">
+            <span>5.</span>
+            <strong>Người mượn sách</strong>
+          </button>
+          <button class="side-link" data-view="reports">
+            <span>6.</span>
+            <strong>Báo cáo</strong>
+          </button>
+        </nav>
+
+        <p class="sidebar-foot">SQL Server Dashboard</p>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <h2 id="viewTitle">Tổng quan hệ thống</h2>
+            <p id="viewSubtitle" class="topbar-subtitle">Theo dõi dữ liệu và thao tác nhanh với cơ sở dữ liệu thư viện.</p>
+          </div>
+          <p class="connection-status" id="connectionStatus">Đang kiểm tra kết nối cơ sở dữ liệu...</p>
+        </header>
+
+        <section class="workspace-panel active" data-view="dashboard">
+          <section class="summary" id="summaryGrid">
+            <article class="summary-card loading-card">Đang tải số liệu tổng quan...</article>
+          </section>
+
+          <section class="info-panel">
+            <h3>Bắt đầu nhanh</h3>
+            <p>Sử dụng thanh bên để chuyển sang chức năng Sách, nhà cung cấp hoặc lập phiếu mượn.</p>
+          </section>
+        </section>
+
+        <section class="workspace-panel" data-view="members">
+          <section class="insert-panel">
+            <div class="control-header">
+              <h2>Thêm thành viên mới</h2>
+              <p>Nhập thông tin thành viên và lưu trực tiếp vào SQL Server.</p>
+            </div>
+
+            <form id="memberForm" class="member-form">
+              <label>
+                Mã thành viên *
+                <input id="memberIdInput" name="ma_thanh_vien" type="text" maxlength="20" required />
+              </label>
+
+              <label>
+                Họ tên *
+                <input id="memberNameInput" name="ho_ten" type="text" maxlength="255" required />
+              </label>
+
+              <label>
+                Số điện thoại
+                <input id="memberPhoneInput" name="sdt" type="text" maxlength="20" />
+              </label>
+
+              <label>
+                Địa chỉ
+                <input id="memberAddressInput" name="dia_chi" type="text" maxlength="255" />
+              </label>
+
+              <label>
+                Ngày đăng ký
+                <input id="memberDateInput" name="ngay_dang_ky" type="date" />
+              </label>
+
+              <label>
+                Tình trạng thẻ
+                <input id="memberStatusInput" name="tinh_trang_the" type="text" maxlength="100" placeholder="Hoạt động" />
+              </label>
+
+              <label class="full-width">
+                Ghi chú
+                <input id="memberNoteInput" name="ghi_chu" type="text" maxlength="255" />
+              </label>
+
+              <div class="full-width member-form-actions">
+                <button type="submit" id="memberSubmitBtn">Thêm thành viên</button>
+                <button type="button" id="memberCancelEditBtn" class="btn-secondary hidden">Hủy chỉnh sửa</button>
+                <p id="memberFormMessage" class="member-form-message"></p>
+              </div>
+            </form>
+          </section>
+
+          <section class="member-crud-panel">
+            <div class="control-header">
+              <h2>Quản lý thành viên</h2>
+              <p>Tìm kiếm, sửa và xóa dữ liệu thành viên trực tiếp từ bảng.</p>
+            </div>
+
+            <form id="memberSearchForm" class="member-search-form">
+              <label>
+                Từ khóa
+                <input id="memberSearchInput" type="text" placeholder="Mã, họ tên hoặc số điện thoại" />
+              </label>
+
+              <label>
+                Tình trạng thẻ
+                <select id="memberStatusFilter">
+                  <option value="">Tất cả</option>
+                  <option value="Hoạt động">Hoạt động</option>
+                  <option value="Khóa">Khóa</option>
+                </select>
+              </label>
+
+              <div class="member-search-actions">
+                <button type="submit">Tìm kiếm</button>
+                <button type="button" id="memberResetFilterBtn" class="btn-secondary">Làm mới</button>
+              </div>
+            </form>
+
+            <p id="memberCrudMeta" class="member-crud-meta">Đang tải danh sách thành viên...</p>
+
+            <div class="table-shell" id="memberCrudTableShell">
+              <p class="loading-message">Đang tải danh sách thành viên...</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="workspace-panel" data-view="books">
+          <section class="insert-panel">
+            <div class="control-header">
+              <h2>Sách</h2>
+              <p>Tạo nhanh bản ghi sách mới trong bảng `Sach`.</p>
+            </div>
+
+            <form id="bookForm" class="entity-form">
+              <label>
+                Mã sách *
+                <input name="ma_sach" type="text" maxlength="20" required />
+              </label>
+              <label>
+                Tên sách *
+                <input name="ten_sach" type="text" maxlength="255" required />
+              </label>
+              <label>
+                Tác giả
+                <input name="tac_gia" type="text" maxlength="255" />
+              </label>
+              <label>
+                Nhà xuất bản
+                <input name="nha_xb" type="text" maxlength="255" />
+              </label>
+              <label>
+                Năm xuất bản
+                <input name="nam_xb" type="number" min="1900" max="2100" />
+              </label>
+              <label>
+                Số trang
+                <input name="so_trang" type="number" min="1" />
+              </label>
+              <label>
+                Giá trị
+                <input name="gia_tri" type="number" min="0" step="1000" />
+              </label>
+              <label>
+                Số bản sao
+                <input name="so_ban_sao" type="number" min="0" value="0" />
+              </label>
+              <label>
+                Mã chi nhánh lưu bản sao
+                <input name="ma_chi_nhanh" type="text" maxlength="20" placeholder="VD: DT01" />
+              </label>
+
+              <div class="full-width member-form-actions">
+                <button type="submit" id="bookSubmitBtn">Sách</button>
+                <button type="button" id="bookCancelEditBtn" class="btn-secondary hidden">Hủy chỉnh sửa</button>
+                <p id="bookFormMessage" class="member-form-message"></p>
+              </div>
+            </form>
+          </section>
+
+          <section class="member-crud-panel">
+            <div class="control-header">
+              <h2>Quản lý danh sách sách</h2>
+              <p>Tìm kiếm, chỉnh sửa và xóa sách trực tiếp.</p>
+            </div>
+
+            <form id="bookSearchForm" class="member-search-form">
+              <label>
+                Từ khóa
+                <input id="bookSearchInput" type="text" placeholder="Mã sách, tên sách, tác giả" />
+              </label>
+
+              <label>
+                Năm xuất bản
+                <input id="bookYearFilter" type="number" min="1900" max="2100" placeholder="Ví dụ: 2024" />
+              </label>
+
+              <div class="member-search-actions">
+                <button type="submit">Tìm kiếm</button>
+                <button type="button" id="bookResetFilterBtn" class="btn-secondary">Làm mới</button>
+              </div>
+            </form>
+
+            <p id="bookCrudMeta" class="member-crud-meta">Đang tải danh sách sách...</p>
+
+            <div class="table-shell" id="bookCrudTableShell">
+              <p class="loading-message">Đang tải danh sách sách...</p>
+            </div>
+          </section>
+
+          <section class="member-crud-panel">
+            <div class="control-header">
+              <h2>Quản lý bản sao sách</h2>
+              <p>Thêm hàng loạt bản sao theo mã sách, gắn chi nhánh và cập nhật trạng thái từng bản sao.</p>
+            </div>
+
+            <form id="bookCopyForm" class="entity-form">
+              <label>
+                Mã sách *
+                <input id="bookCopyBookIdInput" name="ma_sach" type="text" maxlength="20" required />
+              </label>
+              <label>
+                Copy No
+                <input id="bookCopyNoInput" name="copy_no" type="number" min="1" readonly />
+              </label>
+              <label>
+                Số lượng thêm *
+                <input id="bookCopyQuantityInput" name="so_luong" type="number" min="1" value="1" required />
+              </label>
+              <label>
+                Mã chi nhánh *
+                <input id="bookCopyBranchInput" name="ma_chi_nhanh" type="text" maxlength="20" required />
+              </label>
+              <label>
+                Tình trạng mượn
+                <select id="bookCopyBorrowStatusInput" name="tinh_trang_muon">
+                  <option value="Chưa mượn">Chưa mượn</option>
+                  <option value="Đang mượn">Đang mượn</option>
+                </select>
+              </label>
+              <label>
+                Tình trạng vật lý
+                <select id="bookCopyPhysicalStatusInput" name="tinh_trang_vat_ly">
+                  <option value="Tốt">Tốt</option>
+                  <option value="Trung bình">Trung bình</option>
+                  <option value="Hỏng gáy">Hỏng gáy</option>
+                </select>
+              </label>
+              <label>
+                Ngày nhập
+                <input id="bookCopyImportDateInput" name="ngay_nhap" type="date" />
+              </label>
+              <label class="full-width">
+                Ghi chú
+                <input id="bookCopyNoteInput" name="ghi_chu" type="text" maxlength="255" />
+              </label>
+
+              <div class="full-width member-form-actions">
+                <button type="submit" id="bookCopySubmitBtn">Thêm bản sao theo lô</button>
+                <button type="button" id="bookCopyCancelEditBtn" class="btn-secondary hidden">Hủy chỉnh sửa</button>
+                <p id="bookCopyFormMessage" class="member-form-message"></p>
+              </div>
+            </form>
+
+            <form id="bookCopySearchForm" class="member-search-form">
+              <label>
+                Từ khóa
+                <input id="bookCopySearchInput" type="text" placeholder="Mã sách, tên sách hoặc mã chi nhánh" />
+              </label>
+
+              <label>
+                Mã chi nhánh
+                <input id="bookCopyBranchFilter" type="text" placeholder="Ví dụ: DT01" maxlength="20" />
+              </label>
+
+              <label>
+                Tình trạng mượn
+                <select id="bookCopyBorrowStatusFilter">
+                  <option value="">Tất cả</option>
+                  <option value="Chưa mượn">Chưa mượn</option>
+                  <option value="Đang mượn">Đang mượn</option>
+                </select>
+              </label>
+
+              <label>
+                Tình trạng vật lý
+                <select id="bookCopyPhysicalStatusFilter">
+                  <option value="">Tất cả</option>
+                  <option value="Tốt">Tốt</option>
+                  <option value="Trung bình">Trung bình</option>
+                  <option value="Hỏng gáy">Hỏng gáy</option>
+                </select>
+              </label>
+
+              <div class="member-search-actions">
+                <button type="submit">Tìm bản sao</button>
+                <button type="button" id="bookCopyResetFilterBtn" class="btn-secondary">Làm mới</button>
+              </div>
+            </form>
+
+            <p id="bookCopyCrudMeta" class="member-crud-meta">Đang tải danh sách bản sao...</p>
+
+            <div class="table-shell" id="bookCopyCrudTableShell">
+              <p class="loading-message">Đang tải danh sách bản sao...</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="workspace-panel" data-view="suppliers">
+          <section class="insert-panel">
+            <div class="control-header">
+              <h2>Thêm nhà cung cấp</h2>
+              <p>Tạo bản ghi mới trong bảng `NhaCungCap`.</p>
+            </div>
+
+            <form id="supplierForm" class="entity-form">
+              <label>
+                Mã nhà cung cấp *
+                <input name="ma_ncc" type="text" maxlength="20" required />
+              </label>
+              <label>
+                Tên nhà cung cấp *
+                <input name="ten_ncc" type="text" maxlength="255" required />
+              </label>
+              <label>
+                Số điện thoại
+                <input name="sdt" type="text" maxlength="20" />
+              </label>
+              <label>
+                Email
+                <input name="email" type="email" maxlength="100" />
+              </label>
+              <label class="full-width">
+                Địa chỉ
+                <input name="dia_chi" type="text" maxlength="255" />
+              </label>
+
+              <div class="full-width member-form-actions">
+                <button type="submit" id="supplierSubmitBtn">Thêm nhà cung cấp</button>
+                <button type="button" id="supplierCancelEditBtn" class="btn-secondary hidden">Hủy chỉnh sửa</button>
+                <p id="supplierFormMessage" class="member-form-message"></p>
+              </div>
+            </form>
+          </section>
+
+          <section class="member-crud-panel">
+            <div class="control-header">
+              <h2>Quản lý nhà cung cấp</h2>
+              <p>Tìm kiếm, chỉnh sửa và xóa nhà cung cấp trực tiếp từ bảng.</p>
+            </div>
+
+            <form id="supplierSearchForm" class="member-search-form">
+              <label>
+                Từ khóa
+                <input id="supplierSearchInput" type="text" placeholder="Mã NCC, tên, số điện thoại hoặc email" />
+              </label>
+
+              <div class="member-search-actions">
+                <button type="submit">Tìm kiếm</button>
+                <button type="button" id="supplierResetFilterBtn" class="btn-secondary">Làm mới</button>
+              </div>
+            </form>
+
+            <p id="supplierCrudMeta" class="member-crud-meta">Đang tải danh sách nhà cung cấp...</p>
+
+            <div class="table-shell" id="supplierCrudTableShell">
+              <p class="loading-message">Đang tải danh sách nhà cung cấp...</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="workspace-panel" data-view="borrows">
+          <section class="insert-panel">
+            <div class="control-header">
+              <h2>Lập phiếu mượn sách</h2>
+              <p>Quét hoặc nhập mã thành viên và mã sách + copy để tạo giao dịch mượn hằng ngày.</p>
+            </div>
+
+            <form id="borrowForm" class="entity-form">
+              <div class="full-width scan-grid">
+                <label>
+                  Mã thành viên *
+                  <input id="borrowMemberCodeInput" name="ma_thanh_vien" type="text" maxlength="20" placeholder="Quét hoặc nhập mã TV" required />
+                </label>
+                <div class="member-search-actions align-end">
+                  <button type="button" id="borrowLookupMemberBtn" class="btn-secondary">Kiểm tra thành viên</button>
+                </div>
+              </div>
+
+              <article id="borrowMemberCard" class="lookup-card hidden" aria-live="polite"></article>
+
+              <div class="full-width scan-grid scan-book-grid">
+                <label>
+                  Mã sách *
+                  <input id="borrowBookCodeInput" type="text" maxlength="20" placeholder="Ví dụ: S001" required />
+                </label>
+                <label>
+                  Copy No *
+                  <input id="borrowCopyNoInput" type="number" min="1" placeholder="Ví dụ: 2" required />
+                </label>
+                <div class="member-search-actions align-end">
+                  <button type="button" id="borrowLookupCopyBtn" class="btn-secondary">Kiểm tra bản sao</button>
+                </div>
+              </div>
+
+              <article id="borrowCopyCard" class="lookup-card hidden" aria-live="polite"></article>
+
+              <label>
+                Thủ thư (đăng nhập)
+                <input id="borrowLibrarianDisplay" name="ma_thu_thu_hien_thi" type="text" readonly />
+              </label>
+              <input id="borrowLibrarianInput" name="ma_thu_thu" type="hidden" />
+
+              <label>
+                Ngày mượn
+                <input id="borrowDateInput" name="ngay_muon" type="date" readonly />
+              </label>
+
+              <label>
+                Ngày hẹn trả *
+                <input id="borrowDueDateInput" name="ngay_hen_tra" type="date" required />
+              </label>
+
+              <label class="full-width">
+                Ghi chú
+                <input id="borrowNoteInput" name="ghi_chu" type="text" maxlength="255" />
+              </label>
+
+              <div class="full-width member-form-actions">
+                <button type="button" id="borrowRefreshBtn" class="btn-secondary">Nạp lại thông tin quét</button>
+                <button type="submit" id="borrowSubmitBtn">Lưu phiếu mượn</button>
+                <p id="borrowFormMessage" class="member-form-message"></p>
+              </div>
+            </form>
+          </section>
+
+          <section class="member-crud-panel">
+            <div class="control-header">
+              <h2>Danh sách phiếu mượn</h2>
+              <p>Tự cập nhật ngay sau khi thêm mới dữ liệu mượn sách.</p>
+            </div>
+
+            <form id="borrowSearchForm" class="member-search-form">
+              <label>
+                Từ khóa
+                <input id="borrowSearchInput" type="text" placeholder="Tên thành viên, tên sách, mã TV hoặc mã sách" />
+              </label>
+
+              <label>
+                Trạng thái
+                <select id="borrowStatusFilter">
+                  <option value="">Tất cả</option>
+                  <option value="Đang mượn">Đang mượn</option>
+                  <option value="Đã trả">Đã trả</option>
+                  <option value="Quá hạn">Quá hạn</option>
+                </select>
+              </label>
+
+              <div class="member-search-actions">
+                <button type="submit">Tìm kiếm</button>
+                <button type="button" id="borrowResetFilterBtn" class="btn-secondary">Làm mới</button>
+              </div>
+            </form>
+
+            <p id="borrowCrudMeta" class="member-crud-meta">Đang tải danh sách phiếu mượn...</p>
+
+            <div class="table-shell" id="borrowCrudTableShell">
+              <p class="loading-message">Đang tải danh sách phiếu mượn...</p>
+            </div>
+          </section>
+
+          <section class="insert-panel hidden" id="borrowEditPanel">
+            <div class="control-header">
+              <h2>Sửa phiếu mượn</h2>
+              <p>Cập nhật ngày hẹn trả, ngày trả và trạng thái phiếu mượn.</p>
+            </div>
+
+            <form id="borrowEditForm" class="entity-form">
+              <label>
+                Mã thành viên
+                <input id="editBorrowMemberId" name="ma_thanh_vien" type="text" readonly />
+              </label>
+              <label>
+                Mã sách
+                <input id="editBorrowBookId" name="ma_sach" type="text" readonly />
+              </label>
+              <label>
+                Copy
+                <input id="editBorrowCopyNo" name="copy_no" type="number" readonly />
+              </label>
+              <label>
+                Ngày mượn
+                <input id="editBorrowDate" name="ngay_muon" type="date" readonly />
+              </label>
+              <label>
+                Thủ thư
+                <select id="borrowEditLibrarianSelect" name="ma_thu_thu"></select>
+              </label>
+              <label>
+                Ngày hẹn trả
+                <input id="editDueDate" name="ngay_hen_tra" type="date" />
+              </label>
+              <label>
+                Ngày trả
+                <input id="editReturnDate" name="ngay_tra" type="date" />
+              </label>
+              <label>
+                Trạng thái
+                <select id="editBorrowStatus" name="trang_thai">
+                  <option value="Đang mượn">Đang mượn</option>
+                  <option value="Đã trả">Đã trả</option>
+                  <option value="Quá hạn">Quá hạn</option>
+                </select>
+              </label>
+              <label class="full-width">
+                Ghi chú
+                <input id="editBorrowNote" name="ghi_chu" type="text" maxlength="255" />
+              </label>
+
+              <div class="full-width member-form-actions">
+                <button type="submit" id="borrowEditSubmitBtn">Cập nhật phiếu mượn</button>
+                <button type="button" id="borrowEditCancelBtn" class="btn-secondary">Hủy</button>
+                <p id="borrowEditMessage" class="member-form-message"></p>
+              </div>
+            </form>
+          </section>
+        </section>
+
+        <section class="workspace-panel" data-view="reports">
+          <section class="control-panel">
+            <div class="control-header">
+              <h2>Báo cáo nhanh</h2>
+              <p>Chọn một mục bên dưới để chạy truy vấn và hiển thị kết quả.</p>
+            </div>
+
+            <section class="report-overview-grid" id="reportOverviewGrid">
+              <article class="summary-card loading-card">Đang tải tổng quan báo cáo...</article>
+            </section>
+
+            <form id="dateFilterForm" class="date-filter">
+              <label>
+                Tháng
+                <input id="monthInput" type="number" min="1" max="12" value="3" />
+              </label>
+              <label>
+                Năm
+                <input id="yearInput" type="number" min="2000" max="2100" value="2023" />
+              </label>
+              <button type="submit">Cập nhật thống kê ca làm</button>
+            </form>
+
+            <div class="report-grid" id="reportButtons"></div>
+          </section>
+
+          <section class="result-panel">
+            <div class="result-head">
+              <div>
+                <p class="result-kicker">Kết quả truy vấn</p>
+                <h2 id="resultTitle">Chưa chọn chức năng</h2>
+              </div>
+              <p class="result-meta" id="resultMeta"></p>
+            </div>
+
+            <div class="table-shell" id="tableShell">
+              <p class="empty-message">Bấm một chức năng để hiển thị dữ liệu.</p>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
