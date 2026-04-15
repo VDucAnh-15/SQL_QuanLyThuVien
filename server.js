@@ -1955,7 +1955,6 @@ app.get("/api/lookups/book-copies", async (req, res) => {
         ON active_loan.ma_sach = bs.ma_sach
        AND active_loan.copy_no = bs.copy_no
        AND active_loan.ngay_tra IS NULL
-       AND active_loan.trang_thai = N'Đang mượn'
         WHERE (
           @available_only = 0
           OR (
@@ -2004,7 +2003,6 @@ app.get("/api/lookups/book-copy", async (req, res) => {
         ON active_loan.ma_sach = bs.ma_sach
        AND active_loan.copy_no = bs.copy_no
        AND active_loan.ngay_tra IS NULL
-       AND active_loan.trang_thai = N'Đang mượn'
       WHERE bs.ma_sach = @ma_sach
         AND bs.copy_no = @copy_no;
       `,
@@ -2089,8 +2087,7 @@ app.post("/api/borrows", async (req, res) => {
         FROM Muon
         WHERE ma_sach = @ma_sach
           AND copy_no = @copy_no
-          AND ngay_tra IS NULL
-          AND trang_thai = N'Đang mượn';
+          AND ngay_tra IS NULL;
       `);
 
     if (activeBorrowRows.recordset[0] || normalizeStatusToken(copyRows.recordset[0].tinh_trang_muon) === "dang muon") {
@@ -2168,10 +2165,11 @@ app.post("/api/borrows/return", async (req, res) => {
   const maSach = normalizeTextValue(req.body.ma_sach);
   const copyNo = normalizeIntValue(req.body.copy_no);
   const ngayMuon = normalizeDateValue(req.body.ngay_muon);
+  const ngayMuonKey = normalizeTextValue(req.body.ngay_muon_key);
   const maThuThu = normalizeTextValue(req.body.ma_thu_thu) || DEFAULT_LOGGED_LIBRARIAN_ID;
   const returnDate = getTodayDateString();
 
-  if (!maThanhVien || !maSach || Number.isNaN(copyNo) || copyNo === null || !ngayMuon) {
+  if (!maThanhVien || !maSach || Number.isNaN(copyNo) || copyNo === null || (!ngayMuon && !ngayMuonKey)) {
     return res.status(400).json({ message: "Thiếu khóa phiếu mượn để xác nhận trả sách" });
   }
 
@@ -2190,7 +2188,10 @@ app.post("/api/borrows/return", async (req, res) => {
       WHERE LTRIM(RTRIM(ma_thanh_vien)) = LTRIM(RTRIM(@ma_thanh_vien))
         AND LTRIM(RTRIM(ma_sach)) = LTRIM(RTRIM(@ma_sach))
         AND copy_no = @copy_no
-        AND CONVERT(DATE, ngay_muon) = @ngay_muon;
+        AND (
+          (@ngay_muon_key IS NOT NULL AND CONVERT(NVARCHAR(10), ngay_muon, 23) = @ngay_muon_key)
+          OR (@ngay_muon_key IS NULL AND CONVERT(DATE, ngay_muon) = @ngay_muon)
+        );
 
       IF @due_date IS NULL
       BEGIN
@@ -2210,7 +2211,10 @@ app.post("/api/borrows/return", async (req, res) => {
       WHERE LTRIM(RTRIM(ma_thanh_vien)) = LTRIM(RTRIM(@ma_thanh_vien))
         AND LTRIM(RTRIM(ma_sach)) = LTRIM(RTRIM(@ma_sach))
         AND copy_no = @copy_no
-        AND CONVERT(DATE, ngay_muon) = @ngay_muon;
+        AND (
+          (@ngay_muon_key IS NOT NULL AND CONVERT(NVARCHAR(10), ngay_muon, 23) = @ngay_muon_key)
+          OR (@ngay_muon_key IS NULL AND CONVERT(DATE, ngay_muon) = @ngay_muon)
+        );
 
       UPDATE BanSao
       SET tinh_trang_muon = CASE
@@ -2220,7 +2224,6 @@ app.post("/api/borrows/return", async (req, res) => {
           WHERE m2.ma_sach = @ma_sach
             AND m2.copy_no = @copy_no
             AND m2.ngay_tra IS NULL
-            AND m2.trang_thai = N'Đang mượn'
         ) THEN N'Đang mượn'
         ELSE N'Chưa mượn'
       END
@@ -2247,6 +2250,7 @@ app.post("/api/borrows/return", async (req, res) => {
         { name: "ma_sach", type: sql.NVarChar(20), value: maSach },
         { name: "copy_no", type: sql.Int, value: copyNo },
         { name: "ngay_muon", type: sql.Date, value: ngayMuon },
+        { name: "ngay_muon_key", type: sql.NVarChar(10), value: ngayMuonKey },
         { name: "ngay_tra", type: sql.Date, value: returnDate },
         { name: "ma_thu_thu", type: sql.NVarChar(20), value: finalLibrarianId },
         { name: "fine_per_day", type: sql.Int, value: BORROW_FINE_PER_DAY }
@@ -2279,13 +2283,14 @@ app.put("/api/borrows/update", async (req, res) => {
   const maSach = normalizeTextValue(req.body.ma_sach);
   const copyNo = normalizeIntValue(req.body.copy_no);
   const ngayMuon = normalizeDateValue(req.body.ngay_muon);
+  const ngayMuonKey = normalizeTextValue(req.body.ngay_muon_key);
   const maThuThu = normalizeTextValue(req.body.ma_thu_thu);
   const ngayHenTra = normalizeDateValue(req.body.ngay_hen_tra);
   const ngayTra = normalizeDateValue(req.body.ngay_tra);
   const trangThaiInput = normalizeTextValue(req.body.trang_thai);
   const ghiChu = normalizeTextValue(req.body.ghi_chu);
 
-  if (!maThanhVien || !maSach || !ngayMuon || Number.isNaN(copyNo) || copyNo === null) {
+  if (!maThanhVien || !maSach || (!ngayMuon && !ngayMuonKey) || Number.isNaN(copyNo) || copyNo === null) {
     return res.status(400).json({ message: "Thiếu khóa phiếu mượn cần cập nhật" });
   }
 
@@ -2295,9 +2300,28 @@ app.put("/api/borrows/update", async (req, res) => {
     });
   }
 
-  const trangThai =
-    trangThaiInput ||
-    (ngayTra ? "Đã trả" : null);
+  let trangThai = trangThaiInput || (ngayTra ? "Đã trả" : "Đang mượn");
+  let resolvedNgayTra = ngayTra;
+
+  if (trangThai === "Quá hạn") {
+    trangThai = "Đang mượn";
+  }
+
+  if (trangThai !== "Đang mượn" && trangThai !== "Đã trả") {
+    return res.status(400).json({
+      message: "trang_thai không hợp lệ. Chỉ chấp nhận Đang mượn hoặc Đã trả"
+    });
+  }
+
+  if (trangThai === "Đang mượn") {
+    resolvedNgayTra = null;
+  }
+
+  if (trangThai === "Đã trả" && !resolvedNgayTra) {
+    return res.status(400).json({
+      message: "Khi trạng thái là 'Đã trả' thì cần nhập ngày trả"
+    });
+  }
 
   try {
     const affectedRows = await runQuery(
@@ -2309,12 +2333,15 @@ app.put("/api/borrows/update", async (req, res) => {
           ma_thu_thu = COALESCE(@ma_thu_thu, ma_thu_thu),
           ngay_hen_tra = COALESCE(@ngay_hen_tra, ngay_hen_tra),
           ngay_tra = @ngay_tra,
-          trang_thai = COALESCE(@trang_thai, CASE WHEN @ngay_tra IS NULL THEN N'Đang mượn' ELSE N'Đã trả' END),
+          trang_thai = @trang_thai,
           ghi_chu = COALESCE(@ghi_chu, ghi_chu)
       WHERE LTRIM(RTRIM(ma_thanh_vien)) = LTRIM(RTRIM(@ma_thanh_vien))
         AND LTRIM(RTRIM(ma_sach)) = LTRIM(RTRIM(@ma_sach))
         AND copy_no = @copy_no
-        AND CONVERT(DATE, ngay_muon) = @ngay_muon;
+        AND (
+          (@ngay_muon_key IS NOT NULL AND CONVERT(NVARCHAR(10), ngay_muon, 23) = @ngay_muon_key)
+          OR (@ngay_muon_key IS NULL AND CONVERT(DATE, ngay_muon) = @ngay_muon)
+        );
 
       SET @affected = @@ROWCOUNT;
 
@@ -2328,7 +2355,6 @@ app.put("/api/borrows/update", async (req, res) => {
             WHERE m2.ma_sach = @ma_sach
               AND m2.copy_no = @copy_no
               AND m2.ngay_tra IS NULL
-              AND m2.trang_thai = N'Đang mượn'
           ) THEN N'Đang mượn'
           ELSE N'Chưa mượn'
         END
@@ -2343,9 +2369,10 @@ app.put("/api/borrows/update", async (req, res) => {
         { name: "ma_sach", type: sql.NVarChar(20), value: maSach },
         { name: "copy_no", type: sql.Int, value: copyNo },
         { name: "ngay_muon", type: sql.Date, value: ngayMuon },
+        { name: "ngay_muon_key", type: sql.NVarChar(10), value: ngayMuonKey },
         { name: "ma_thu_thu", type: sql.NVarChar(20), value: maThuThu },
         { name: "ngay_hen_tra", type: sql.Date, value: ngayHenTra },
-        { name: "ngay_tra", type: sql.Date, value: ngayTra },
+        { name: "ngay_tra", type: sql.Date, value: resolvedNgayTra },
         { name: "trang_thai", type: sql.NVarChar(50), value: trangThai },
         { name: "ghi_chu", type: sql.NVarChar(255), value: ghiChu }
       ]
@@ -2376,8 +2403,8 @@ app.get("/api/dashboard/summary", async (req, res) => {
         (SELECT COUNT(*) FROM ThanhVien) AS tong_thanh_vien,
         (SELECT COUNT(*) FROM NhaCungCap) AS tong_nha_cung_cap,
         (SELECT COUNT(*) FROM ChiNhanh) AS tong_chi_nhanh,
-        (SELECT COUNT(*) FROM Muon WHERE trang_thai = N'Đang mượn') AS dang_muon,
-        (SELECT COUNT(*) FROM Muon WHERE ngay_hen_tra < GETDATE() AND ngay_tra IS NULL) AS qua_han
+        (SELECT COUNT(*) FROM Muon WHERE ngay_tra IS NULL AND ngay_hen_tra >= CAST(GETDATE() AS DATE)) AS dang_muon,
+        (SELECT COUNT(*) FROM Muon WHERE ngay_tra IS NULL AND ngay_hen_tra < CAST(GETDATE() AS DATE)) AS qua_han
     `);
 
     res.json(rows[0]);
@@ -2421,13 +2448,14 @@ app.get("/api/reports/borrow-list", async (req, res) => {
           s.ten_sach,
           m.copy_no,
           m.ngay_muon,
+          CONVERT(NVARCHAR(10), m.ngay_muon, 23) AS ngay_muon_key,
           m.ngay_hen_tra,
           m.ngay_tra,
-          m.trang_thai,
           CASE
             WHEN m.ngay_tra IS NULL AND m.ngay_hen_tra < CAST(GETDATE() AS DATE) THEN N'Quá hạn'
-            ELSE m.trang_thai
-          END AS trang_thai_hien_thi,
+            WHEN m.ngay_tra IS NULL THEN N'Đang mượn'
+            ELSE N'Đã trả'
+          END AS trang_thai,
           CASE
             WHEN DATEDIFF(DAY, m.ngay_hen_tra, COALESCE(m.ngay_tra, CAST(GETDATE() AS DATE))) > 0
               THEN DATEDIFF(DAY, m.ngay_hen_tra, COALESCE(m.ngay_tra, CAST(GETDATE() AS DATE)))
@@ -2453,8 +2481,13 @@ app.get("/api/reports/borrow-list", async (req, res) => {
             AND m.ngay_hen_tra < CAST(GETDATE() AS DATE)
           )
           OR (
-            @status <> N'Quá hạn'
-            AND m.trang_thai = @status
+            @status = N'Đang mượn'
+            AND m.ngay_tra IS NULL
+            AND m.ngay_hen_tra >= CAST(GETDATE() AS DATE)
+          )
+          OR (
+            @status = N'Đã trả'
+            AND m.ngay_tra IS NOT NULL
           )
       )
       AND (
@@ -2487,15 +2520,20 @@ app.get("/api/reports/overdue-books", async (req, res) => {
           m.ma_sach,
           s.ten_sach,
           tv.ho_ten AS thanh_vien,
+          m.ma_thanh_vien,
+          m.copy_no,
+          m.ngay_muon,
           m.ngay_hen_tra,
-          DATEDIFF(DAY, m.ngay_hen_tra, GETDATE()) AS so_ngay_qua_han
+          DATEDIFF(DAY, m.ngay_hen_tra, CAST(GETDATE() AS DATE)) AS so_ngay_qua_han,
+          DATEDIFF(DAY, m.ngay_hen_tra, CAST(GETDATE() AS DATE)) * @fine_per_day AS tien_phat_tam_tinh,
+          N'Quá hạn' AS trang_thai_hien_thi
       FROM Muon m
       JOIN Sach s ON m.ma_sach = s.ma_sach
       JOIN ThanhVien tv ON m.ma_thanh_vien = tv.ma_thanh_vien
-      WHERE m.trang_thai = N'Đang mượn'
-        AND m.ngay_hen_tra < GETDATE()
+      WHERE m.ngay_tra IS NULL
+        AND m.ngay_hen_tra < CAST(GETDATE() AS DATE)
       ORDER BY so_ngay_qua_han DESC;
-    `);
+    `, [{ name: "fine_per_day", type: sql.Int, value: BORROW_FINE_PER_DAY }]);
 
     res.json(rows);
   } catch (error) {
@@ -2592,15 +2630,33 @@ app.get("/api/reports/overdue-members", async (req, res) => {
           tv.ma_thanh_vien,
           tv.ho_ten,
           m.ma_sach,
+          s.ten_sach,
+          m.copy_no,
           m.ngay_muon,
           m.ngay_hen_tra,
-          DATEDIFF(DAY, m.ngay_hen_tra, GETDATE()) AS so_ngay_qua_han
+          CASE
+            WHEN m.ngay_hen_tra < CAST(GETDATE() AS DATE)
+              THEN DATEDIFF(DAY, m.ngay_hen_tra, CAST(GETDATE() AS DATE))
+            ELSE 0
+          END AS so_ngay_qua_han,
+          CASE
+            WHEN m.ngay_hen_tra < CAST(GETDATE() AS DATE)
+              THEN DATEDIFF(DAY, m.ngay_hen_tra, CAST(GETDATE() AS DATE)) * @fine_per_day
+            ELSE 0
+          END AS tien_phat_tam_tinh,
+          CASE
+            WHEN m.ngay_hen_tra < CAST(GETDATE() AS DATE) THEN N'Quá hạn'
+            ELSE N'Đang mượn'
+          END AS trang_thai_hien_thi
       FROM Muon m
       JOIN ThanhVien tv ON m.ma_thanh_vien = tv.ma_thanh_vien
-      WHERE m.ngay_hen_tra < GETDATE()
-        AND m.ngay_tra IS NULL
-      ORDER BY so_ngay_qua_han DESC;
-    `);
+      JOIN Sach s ON m.ma_sach = s.ma_sach
+      WHERE m.ngay_tra IS NULL
+      ORDER BY
+        CASE WHEN m.ngay_hen_tra < CAST(GETDATE() AS DATE) THEN 0 ELSE 1 END,
+        m.ngay_hen_tra ASC,
+        tv.ho_ten ASC;
+    `, [{ name: "fine_per_day", type: sql.Int, value: BORROW_FINE_PER_DAY }]);
 
     res.json(rows);
   } catch (error) {

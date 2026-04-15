@@ -540,7 +540,6 @@
                 <select id="editBorrowStatus" name="trang_thai">
                   <option value="Đang mượn">Đang mượn</option>
                   <option value="Đã trả">Đã trả</option>
-                  <option value="Quá hạn">Quá hạn</option>
                 </select>
               </label>
               <label class="full-width">
@@ -598,6 +597,18 @@
           </section>
         </section>
       </main>
+    </div>
+
+    <div id="appConfirmModal" class="app-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appConfirmTitle">
+      <div class="app-modal-backdrop" data-role="backdrop"></div>
+      <section class="app-modal-panel">
+        <h3 id="appConfirmTitle">Xác nhận thao tác</h3>
+        <p id="appConfirmMessage">Bạn có chắc chắn muốn tiếp tục?</p>
+        <div class="app-modal-actions">
+          <button type="button" id="appConfirmCancelBtn" class="btn-secondary">Hủy</button>
+          <button type="button" id="appConfirmOkBtn">Xác nhận</button>
+        </div>
+      </section>
     </div>
 
     <script src="app.js"></script>

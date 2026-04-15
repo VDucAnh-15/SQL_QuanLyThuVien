@@ -33,7 +33,7 @@ const reports = [
   {
     id: "overdue-members",
     title: "Thành viên chưa trả sách",
-    description: "Thông tin thành viên đang quá hạn và chưa trả.",
+    description: "Thông tin thành viên đang mượn hoặc quá hạn chưa trả.",
     endpoint: "/api/reports/overdue-members"
   },
   {
@@ -96,6 +96,7 @@ const state = {
   editingBookCopyKey: null,
   editingSupplierId: null,
   editingBorrowKey: null,
+  lastUpdatedBorrowKey: null,
   borrowCurrentMember: null,
   borrowCurrentCopy: null,
   currentLibrarian: null,
@@ -199,9 +200,18 @@ const borrowCrudTableShell = document.getElementById("borrowCrudTableShell");
 const borrowEditPanel = document.getElementById("borrowEditPanel");
 const borrowEditForm = document.getElementById("borrowEditForm");
 const borrowEditLibrarianSelect = document.getElementById("borrowEditLibrarianSelect");
+const borrowEditStatusInput = document.getElementById("editBorrowStatus");
+const borrowEditReturnDateInput = document.getElementById("editReturnDate");
 const borrowEditSubmitBtn = document.getElementById("borrowEditSubmitBtn");
 const borrowEditCancelBtn = document.getElementById("borrowEditCancelBtn");
 const borrowEditMessage = document.getElementById("borrowEditMessage");
+const appConfirmModal = document.getElementById("appConfirmModal");
+const appConfirmMessage = document.getElementById("appConfirmMessage");
+const appConfirmTitle = document.getElementById("appConfirmTitle");
+const appConfirmCancelBtn = document.getElementById("appConfirmCancelBtn");
+const appConfirmOkBtn = document.getElementById("appConfirmOkBtn");
+
+let confirmModalResolver = null;
 
 function escapeHtml(value) {
   return String(value)
@@ -275,6 +285,85 @@ function setMessage(target, message, type = "") {
   if (type) {
     target.classList.add(type);
   }
+}
+
+function closeConfirmDialog(accepted) {
+  if (!appConfirmModal || appConfirmModal.classList.contains("hidden")) {
+    return;
+  }
+
+  appConfirmModal.classList.add("hidden");
+  appConfirmModal.setAttribute("aria-hidden", "true");
+
+  if (confirmModalResolver) {
+    confirmModalResolver(Boolean(accepted));
+    confirmModalResolver = null;
+  }
+}
+
+function openConfirmDialog({ title, message, confirmText, cancelText, danger } = {}) {
+  const dialogTitle = title || "Xác nhận thao tác";
+  const dialogMessage = message || "Bạn có chắc chắn muốn tiếp tục?";
+  const okText = confirmText || "Xác nhận";
+  const noText = cancelText || "Hủy";
+
+  if (!appConfirmModal || !appConfirmTitle || !appConfirmMessage || !appConfirmCancelBtn || !appConfirmOkBtn) {
+    return Promise.resolve(window.confirm(`${dialogTitle}\n${dialogMessage}`));
+  }
+
+  appConfirmTitle.textContent = dialogTitle;
+  appConfirmMessage.textContent = dialogMessage;
+  appConfirmCancelBtn.textContent = noText;
+  appConfirmOkBtn.textContent = okText;
+  appConfirmOkBtn.classList.toggle("danger", Boolean(danger));
+
+  appConfirmModal.classList.remove("hidden");
+  appConfirmModal.setAttribute("aria-hidden", "false");
+  appConfirmCancelBtn.focus();
+
+  return new Promise((resolve) => {
+    confirmModalResolver = resolve;
+  });
+}
+
+function bindConfirmDialogEvents() {
+  if (!appConfirmModal || !appConfirmCancelBtn || !appConfirmOkBtn) {
+    return;
+  }
+
+  appConfirmModal.addEventListener("click", (event) => {
+    if (event.target.matches('[data-role="backdrop"]')) {
+      closeConfirmDialog(false);
+    }
+  });
+
+  appConfirmCancelBtn.addEventListener("click", () => {
+    closeConfirmDialog(false);
+  });
+
+  appConfirmOkBtn.addEventListener("click", () => {
+    closeConfirmDialog(true);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (!appConfirmModal || appConfirmModal.classList.contains("hidden")) {
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeConfirmDialog(false);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      const targetTag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "";
+      if (targetTag !== "textarea") {
+        event.preventDefault();
+        closeConfirmDialog(true);
+      }
+    }
+  });
 }
 
 function ensureSelectValue(selectElement, value, fallback = "") {
@@ -374,6 +463,21 @@ function setBorrowEditMode(mode = "create") {
   borrowEditForm.reset();
   setMessage(borrowEditMessage, "");
   borrowEditPanel.classList.add("hidden");
+}
+
+function syncBorrowEditStatusControls() {
+  if (!borrowEditStatusInput || !borrowEditReturnDateInput) {
+    return;
+  }
+
+  const status = String(borrowEditStatusInput.value || "").trim();
+  const isBorrowing = status === "Đang mượn";
+
+  borrowEditReturnDateInput.disabled = isBorrowing;
+
+  if (isBorrowing) {
+    borrowEditReturnDateInput.value = "";
+  }
 }
 
 function toDateInputValue(value) {
@@ -754,10 +858,12 @@ async function startEditMember(memberId) {
 }
 
 async function removeMember(memberId) {
-  const accepted = window.confirm(
-    `Bạn có chắc muốn xóa thành viên ${memberId}?\n` +
-      "Thao tác này sẽ xóa cả lịch sử mượn liên quan của thành viên."
-  );
+  const accepted = await openConfirmDialog({
+    title: `Xóa thành viên ${memberId}?`,
+    message: "Thao tác này sẽ xóa cả lịch sử mượn liên quan của thành viên.",
+    confirmText: "Xóa thành viên",
+    danger: true
+  });
   if (!accepted) {
     return;
   }
@@ -863,10 +969,12 @@ async function startEditSupplier(supplierId) {
 }
 
 async function removeSupplier(supplierId) {
-  const accepted = window.confirm(
-    `Bạn có chắc muốn xóa nhà cung cấp ${supplierId}?\n` +
-      "Thao tác này sẽ xóa cả liên kết phân phối theo chi nhánh."
-  );
+  const accepted = await openConfirmDialog({
+    title: `Xóa nhà cung cấp ${supplierId}?`,
+    message: "Thao tác này sẽ xóa cả liên kết phân phối theo chi nhánh.",
+    confirmText: "Xóa nhà cung cấp",
+    danger: true
+  });
   if (!accepted) {
     return;
   }
@@ -1035,7 +1143,7 @@ function renderBorrowCrudTable(rows) {
       const maThanhVien = escapeHtml(row.ma_thanh_vien || "");
       const maSach = escapeHtml(row.ma_sach || "");
       const copyNo = escapeHtml(row.copy_no ?? "");
-      const ngayMuon = toDateInputValue(row.ngay_muon);
+      const ngayMuon = toDateInputValue(row.ngay_muon_key || row.ngay_muon);
       const ngayHenTra = toDateInputValue(row.ngay_hen_tra);
       const ngayTra = toDateInputValue(row.ngay_tra);
       const maThuThu = escapeHtml(row.ma_thu_thu || "");
@@ -1045,9 +1153,14 @@ function renderBorrowCrudTable(rows) {
       const soNgayQuaHan = Number(row.so_ngay_qua_han || 0);
       const tienPhat = Number(row.tien_phat || 0);
       const canConfirmReturn = !ngayTra && String(row.trang_thai || "") !== "Đã trả";
+      const currentRowKey = `${row.ma_thanh_vien || ""}|${row.ma_sach || ""}|${row.copy_no || ""}|${ngayMuon}`;
+      const updatedRowKey = state.lastUpdatedBorrowKey
+        ? `${state.lastUpdatedBorrowKey.ma_thanh_vien}|${state.lastUpdatedBorrowKey.ma_sach}|${state.lastUpdatedBorrowKey.copy_no}|${state.lastUpdatedBorrowKey.ngay_muon_key}`
+        : "";
+      const rowClass = currentRowKey === updatedRowKey ? ' class="updated-row"' : "";
 
       return `
-        <tr>
+        <tr${rowClass}>
           <td>${maThanhVien}</td>
           <td>${escapeHtml(row.ten_thanh_vien || "")}</td>
           <td>${maSach}</td>
@@ -1059,6 +1172,7 @@ function renderBorrowCrudTable(rows) {
           <td>${getBorrowStatusChip(trangThaiHienThi)}</td>
           <td>${soNgayQuaHan > 0 ? escapeHtml(soNgayQuaHan) : "0"}</td>
           <td>${escapeHtml(formatCurrency(tienPhat))}</td>
+          <td>${ghiChu}</td>
           <td>${escapeHtml(row.ten_thu_thu || "")}</td>
           <td>
             <div class="table-row-actions">
@@ -1071,6 +1185,7 @@ function renderBorrowCrudTable(rows) {
                        data-ma-sach="${maSach}"
                        data-copy-no="${copyNo}"
                        data-ngay-muon="${escapeHtml(ngayMuon)}"
+                       data-ngay-muon-key="${escapeHtml(ngayMuon)}"
                      >Xác nhận trả</button>`
                   : ""
               }
@@ -1081,6 +1196,7 @@ function renderBorrowCrudTable(rows) {
                 data-ma-sach="${maSach}"
                 data-copy-no="${copyNo}"
                 data-ngay-muon="${escapeHtml(ngayMuon)}"
+                data-ngay-muon-key="${escapeHtml(ngayMuon)}"
                 data-ma-thu-thu="${maThuThu}"
                 data-ngay-hen-tra="${escapeHtml(ngayHenTra)}"
                 data-ngay-tra="${escapeHtml(ngayTra)}"
@@ -1109,6 +1225,7 @@ function renderBorrowCrudTable(rows) {
           <th>Trạng thái</th>
           <th>Ngày quá hạn</th>
           <th>Tiền phạt</th>
+          <th>Ghi chú</th>
           <th>Thủ thư</th>
           <th>Thao tác</th>
         </tr>
@@ -1120,6 +1237,16 @@ function renderBorrowCrudTable(rows) {
   `;
 
   borrowCrudMeta.textContent = `${rows.length} phiếu mượn gần nhất`;
+
+  if (state.lastUpdatedBorrowKey) {
+    setTimeout(() => {
+      state.lastUpdatedBorrowKey = null;
+      const highlightedRow = borrowCrudTableShell.querySelector("tr.updated-row");
+      if (highlightedRow) {
+        highlightedRow.classList.remove("updated-row");
+      }
+    }, 3000);
+  }
 }
 
 async function loadBorrowCrudList() {
@@ -1133,7 +1260,7 @@ async function loadBorrowCrudList() {
     });
 
     const rows = await fetchJson(`/api/reports/borrow-list${query}`);
-    renderBorrowCrudTable((rows || []).slice(0, 20));
+    renderBorrowCrudTable(rows || []);
   } catch (error) {
     borrowCrudMeta.textContent = "Lỗi tải dữ liệu";
     borrowCrudTableShell.innerHTML = `<p class="error-message">${escapeHtml(error.message)}</p>`;
@@ -1145,17 +1272,20 @@ function startEditBorrowFromButton(button) {
   const maSach = button.getAttribute("data-ma-sach") || "";
   const copyNo = button.getAttribute("data-copy-no") || "";
   const ngayMuon = button.getAttribute("data-ngay-muon") || "";
+  const ngayMuonKey = button.getAttribute("data-ngay-muon-key") || ngayMuon;
   const maThuThu = button.getAttribute("data-ma-thu-thu") || "";
   const ngayHenTra = button.getAttribute("data-ngay-hen-tra") || "";
   const ngayTra = button.getAttribute("data-ngay-tra") || "";
-  const trangThai = button.getAttribute("data-trang-thai") || "Đang mượn";
+  const trangThaiRaw = button.getAttribute("data-trang-thai") || "Đang mượn";
+  const trangThai = trangThaiRaw === "Quá hạn" ? "Đang mượn" : trangThaiRaw;
   const ghiChu = button.getAttribute("data-ghi-chu") || "";
 
   state.editingBorrowKey = {
     ma_thanh_vien: maThanhVien,
     ma_sach: maSach,
     copy_no: Number(copyNo),
-    ngay_muon: ngayMuon
+    ngay_muon: ngayMuon,
+    ngay_muon_key: ngayMuonKey
   };
 
   borrowEditForm.querySelector('[name="ma_thanh_vien"]').value = maThanhVien;
@@ -1167,6 +1297,7 @@ function startEditBorrowFromButton(button) {
   borrowEditForm.querySelector('[name="ngay_tra"]').value = ngayTra;
   borrowEditForm.querySelector('[name="trang_thai"]').value = trangThai;
   borrowEditForm.querySelector('[name="ghi_chu"]').value = ghiChu;
+  syncBorrowEditStatusControls();
 
   setBorrowEditMode("edit");
   setMessage(borrowEditMessage, `Đang sửa phiếu mượn ${maThanhVien} - ${maSach} copy ${copyNo}`, "loading");
@@ -1178,13 +1309,18 @@ async function confirmReturnBorrowFromButton(button) {
   const maSach = button.getAttribute("data-ma-sach") || "";
   const copyNo = Number(button.getAttribute("data-copy-no") || "");
   const ngayMuon = button.getAttribute("data-ngay-muon") || "";
+  const ngayMuonKey = button.getAttribute("data-ngay-muon-key") || ngayMuon;
 
   if (!maThanhVien || !maSach || !Number.isInteger(copyNo) || !ngayMuon) {
     setMessage(borrowFormMessage, "Không xác định được phiếu mượn cần trả.", "error");
     return;
   }
 
-  const accepted = window.confirm(`Xác nhận trả sách ${maSach} - Copy ${copyNo} cho thành viên ${maThanhVien}?`);
+  const accepted = await openConfirmDialog({
+    title: "Xác nhận trả sách",
+    message: `Trả sách ${maSach} - Copy ${copyNo} cho thành viên ${maThanhVien}?\nHệ thống sẽ tự động ghi ngày trả là hôm nay.`,
+    confirmText: "Xác nhận trả"
+  });
   if (!accepted) {
     return;
   }
@@ -1197,6 +1333,7 @@ async function confirmReturnBorrowFromButton(button) {
       ma_sach: maSach,
       copy_no: copyNo,
       ngay_muon: ngayMuon,
+      ngay_muon_key: ngayMuonKey,
       ma_thu_thu: state.currentLibrarian ? state.currentLibrarian.ma_thu_thu : undefined
     });
 
@@ -1225,6 +1362,11 @@ async function updateBorrowRecord() {
 
   const payload = getPayloadFromForm(borrowEditForm);
   payload.copy_no = Number(payload.copy_no);
+  payload.ngay_muon_key = state.editingBorrowKey.ngay_muon_key || payload.ngay_muon;
+
+  if (payload.trang_thai === "Đang mượn") {
+    delete payload.ngay_tra;
+  }
 
   if (payload.trang_thai === "Đã trả" && !payload.ngay_tra) {
     setMessage(borrowEditMessage, "Vui lòng nhập ngày trả khi trạng thái là Đã trả.", "error");
@@ -1235,11 +1377,18 @@ async function updateBorrowRecord() {
   setMessage(borrowEditMessage, "Đang cập nhật phiếu mượn...", "loading");
 
   try {
+    state.lastUpdatedBorrowKey = {
+      ma_thanh_vien: payload.ma_thanh_vien,
+      ma_sach: payload.ma_sach,
+      copy_no: payload.copy_no,
+      ngay_muon_key: payload.ngay_muon_key
+    };
     await sendJson("/api/borrows/update", "PUT", payload);
     setMessage(borrowEditMessage, "Đã cập nhật phiếu mượn thành công.", "ok");
     await Promise.all([loadSummary(), loadBorrowLookups(), loadBorrowCrudList(), loadBookCopyCrudList(), loadReportsOverview()]);
     runReport("borrow-list");
     setBorrowEditMode("create");
+    setMessage(borrowFormMessage, "Cập nhật phiếu mượn thành công.", "ok");
   } catch (error) {
     setMessage(borrowEditMessage, error.message, "error");
   } finally {
@@ -1552,7 +1701,12 @@ async function startEditBook(bookId) {
 }
 
 async function removeBook(bookId) {
-  const accepted = window.confirm(`Bạn có chắc muốn xóa sách ${bookId}?`);
+  const accepted = await openConfirmDialog({
+    title: `Xóa sách ${bookId}?`,
+    message: "Thao tác xóa sách có thể làm mất liên kết dữ liệu liên quan.",
+    confirmText: "Xóa sách",
+    danger: true
+  });
   if (!accepted) {
     return;
   }
@@ -1955,6 +2109,10 @@ function bindEvents() {
     await updateBorrowRecord();
   });
 
+  borrowEditStatusInput.addEventListener("change", () => {
+    syncBorrowEditStatusControls();
+  });
+
   borrowEditCancelBtn.addEventListener("click", () => {
     setBorrowEditMode("create");
   });
@@ -2021,6 +2179,7 @@ async function init() {
   setBookCopyFormMode("create");
   setSupplierFormMode("create");
   setBorrowEditMode("create");
+  bindConfirmDialogEvents();
   buildReportButtons();
   bindEvents();
   setActiveView("dashboard");
